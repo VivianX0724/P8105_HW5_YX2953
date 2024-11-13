@@ -1,0 +1,98 @@
+---
+title: "P8105_HW5_YX2953"
+output: github_document
+date: "2024-11-13"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+birthday_simulation <- function(group_size) {
+  # Generate random birthdays for the group
+  birthdays <- sample(1:365, group_size, replace = TRUE)
+  # Check if there are any duplicate birthdays
+  return(any(duplicated(birthdays)))
+}
+
+birthday_paradox_probabilities <- function(max_group_size = 50, simulations = 10000) {
+  probabilities <- numeric(max_group_size - 1)
+  
+  for (group_size in 2:max_group_size) {
+    # Run the simulation and calculate the probability of duplicate birthdays
+    duplicates <- sum(replicate(simulations, birthday_simulation(group_size)))
+    probabilities[group_size - 1] <- duplicates / simulations
+  }
+  
+  return(probabilities)
+}
+
+# Run the simulation for group sizes 2 to 50
+probabilities <- birthday_paradox_probabilities()
+
+# Plot the probabilities
+group_sizes <- 2:50
+plot(group_sizes, probabilities, type = "o", pch = 16, col = "purple",
+     xlab = "Group Size", ylab = "Probability of Shared Birthday",
+     main = "Probability of At Least Two People Sharing a Birthday")
+grid()
+```
+
+```{r}
+library(broom)
+
+n <- 30
+sigma <- 5
+alpha <- 0.05
+mu_values <- c(0, 1, 2, 3, 4, 5, 6)
+num_simulations <- 5000
+
+# Create empty data frame to store results
+results <- data.frame(mu = numeric(), estimate = numeric(), p_value = numeric())
+
+# for each mu, sun the simulation 
+for (mu in mu_values) {
+  for (i in 1:num_simulations) {
+    # Generate random sample from N(mu, sigma)
+    x <- rnorm(n, mean = mu, sd = sigma)
+    
+    # Perform one-sample t-test
+    t_test_result <- t.test(x, mu = 0)
+    
+    # Extract estimate and p-value
+    tidy_result <- tidy(t_test_result)
+    estimate <- tidy_result$estimate
+    p_value <- tidy_result$p.value
+    
+    # Store results
+    results <- rbind(results, data.frame(mu = mu, estimate = estimate, p_value = p_value))
+  }
+}
+
+# Calculate power for each mu
+power_results <- aggregate(p_value ~ mu, data = results, function(p) mean(p < alpha))
+
+# Plot power as a function of effect size
+plot(power_results$mu, power_results$p_value, type = "o", pch = 16, col = "purple",
+     xlab = "True Value of Mu", ylab = "Power (Proportion of Null Rejections)",
+     main = "Power of the Test as a Function of Effect Size")
+grid()
+
+# Calculate average estimate and conditional average for null rejections
+average_estimate <- aggregate(estimate ~ mu, data = results, mean)
+average_reject_estimate <- aggregate(estimate ~ mu, data = subset(results, p_value < alpha), mean)
+
+# Plot average estimate vs. true value of mu
+plot(average_estimate$mu, average_estimate$estimate, type = "o", pch = 16, col = "lightgreen",
+     xlab = "True Value of Mu", ylab = "Average Estimate",
+     main = "Average Estimate as a Function of True Mu")
+points(average_reject_estimate$mu, average_reject_estimate$estimate, type = "o", pch = 16, col = "lightblue")
+legend("topleft", legend = c("Average Estimate", "Average Estimate (Null Rejected)"),
+       col = c("lightgreen", "lightblue"), pch = 16)
+grid()
+```
+Description:
+The first plot shows that the power increases when the effect size increases. When the effect size is larger than 4, the power gets very close to 1.
+
+The second plot
