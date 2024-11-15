@@ -101,23 +101,32 @@ The first plot shows that the power increases when the effect size increases. Wh
 
 The second plot shows that the sample average of mu^ across tests for which the null is rejected tend to be larger than the true value of mu. I think it is due to selection bias of hypothesis  testing. We only consider cases with significant results, especially with small sizes of effects, so it will lead to overestimation of true effect.
 
+
 Problem 3
+
+Describe the raw data:
+This dataset provides detailed information on individual homicide cases, allowing analysis of homicide resolution rates, victim demographics and geographical trends. Some key variables are city and state, which allows for grouping by location, dispositions, which show the status of the homicide, etc.
 
 ```{r}
 # Load necessary libraries
 library(dplyr)
 library(broom)
+library(tidyr)
 library(purrr)
 library(ggplot2)
 
-# Load data (assuming homicide-data.csv is in your working directory)
+# Load data (assuming the file is in your working directory)
 homicide_data <- read.csv("homicide-data.csv", stringsAsFactors = FALSE)
+
+# Inspect the raw data
+str(homicide_data)
+head(homicide_data)
 
 # Create city_state variable
 homicide_data <- homicide_data %>%
   mutate(city_state = paste(city, state, sep = ", "))
 
-# Summarize data within cities
+# Summarize within cities to obtain the total number of homicides and the number of unsolved homicides
 homicide_summary <- homicide_data %>%
   group_by(city_state) %>%
   summarize(
@@ -125,17 +134,36 @@ homicide_summary <- homicide_data %>%
     unsolved_homicides = sum(disposition %in% c("Closed without arrest", "Open/No arrest"))
   )
 
-# Function to run prop.test and tidy the result
+# Filter for Baltimore, MD to perform proportion test
+baltimore_data <- filter(homicide_summary, city_state == "Baltimore, MD")
+
+# Run prop.test for Baltimore, MD
+prop_test_result <- prop.test(baltimore_data$unsolved_homicides, baltimore_data$total_homicides)
+
+# Tidy the prop.test output and extract the estimated proportion and confidence intervals
+tidy_result <- broom::tidy(prop_test_result)
+baltimore_proportion <- tidy_result %>%
+  select(estimate, conf.low, conf.high)
+
+# Display the result
+print(baltimore_proportion)
+```
+
+```{r}
+
+# Define a function to run prop.test and tidy the result
 run_prop_test <- function(unsolved, total) {
-  test_result <- prop.test(unsolved, total)
-  tidy(test_result) %>%
-    select(estimate, conf.low, conf.high)
+  prop_test_result <- prop.test(unsolved, total)
+  tidy(prop_test_result)
 }
 
-# Apply prop.test for each city and extract proportions and confidence intervals
+# Use map2 to apply the prop.test function to each city and get proportions and CIs
 homicide_summary <- homicide_summary %>%
-  mutate(test_result = map2(unsolved_homicides, total_homicides, run_prop_test)) %>%
-  unnest(cols = test_result)
+  mutate(
+    test_result = map2(unsolved_homicides, total_homicides, run_prop_test)
+  ) %>%
+  unnest(cols = test_result) %>%
+  select(city_state, total_homicides, unsolved_homicides, estimate, conf.low, conf.high)
 
 # Rename columns for clarity
 homicide_summary <- homicide_summary %>%
@@ -145,15 +173,18 @@ homicide_summary <- homicide_summary %>%
     conf_upper = conf.high
   )
 
-# Sort cities by proportion of unsolved homicides for better visualization
+# Display the tidy dataframe with estimated proportions and CIs for each city
+print(homicide_summary)
+```
+```{r}
+# Arrange the data by the proportion of unsolved homicides for plotting
 homicide_summary <- homicide_summary %>%
   arrange(desc(proportion_unsolved))
 
-# Plot the proportions with confidence intervals for each city
-ggplot(homicide_summary, aes(x = reorder(city_state, proportion_unsolved), 
-                             y = proportion_unsolved)) +
-  geom_point(color = "blue") +
-  geom_errorbar(aes(ymin = conf_lower, ymax = conf_upper), width = 0.2, color = "grey") +
+# Plot with estimates and confidence intervals
+ggplot(homicide_summary, aes(x = reorder(city_state, proportion_unsolved), y = proportion_unsolved)) +
+  geom_point(color = "purple") +
+  geom_errorbar(aes(ymin = conf_lower, ymax = conf_upper), width = 0.2, color = "pink") +
   coord_flip() +
   labs(
     title = "Proportion of Unsolved Homicides with Confidence Intervals by City",
